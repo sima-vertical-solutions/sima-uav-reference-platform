@@ -38,6 +38,19 @@ A release may ship the board's WiFi hotspot with a **default SSID and passphrase
 in WiFi range. Set your own before running the WiFi bring-up, and never fly a vehicle that still
 uses the default. Each release's `INSTALL.md` says where.
 
+## Configuration
+
+Every release is configured in layers, later ones winning: node defaults compiled into the
+software, per-stack YAML files shipped in the archive, a hardware or simulation half picked by the
+`mode` flag, values resolved on the board at install time, launch arguments, and finally the deploy
+flags. Model archives are provisioned separately and selected by a `model_path` parameter, so
+swapping a model is a config change, not a rebuild.
+
+[`CONFIGURATION.md`](CONFIGURATION.md) lists every externalized parameter of the current stack:
+the file it lives in, its hardware and simulation values where they differ, and whether it has
+been verified on the target vehicle. Its last section collects every value still marked as
+unverified. From the next release the same file ships inside the archive beside `INSTALL.md`.
+
 ## Installing
 
 Every release follows the same three steps, run from a laptop with ssh to the board or from the
