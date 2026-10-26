@@ -47,10 +47,9 @@ from the flight controller's height and attitude. The node speaks MAVLink and is
 feed ArduPilot's EKF3 as a vision position source for GPS-denied flight. It publishes a
 dead-reckoned odometry topic for bench checks and recording.
 
-In this release the MAVLink output is **switched off on hardware** by configuration: the camera
-mount angles, the height offset and the bridge endpoint are still marked unverified for the
-reference vehicle. Enabling it is a two-line config change once those are measured. In simulation
-it is on, and it includes a visual-inertial mode that fuses the simulated IMU and rangefinder.
+The link to the flight controller ships **disabled by configuration** and is enabled per vehicle
+once three airframe-specific values have been measured (section 6). In simulation it is on, and it
+includes a visual-inertial mode that fuses the simulated IMU and rangefinder.
 
 ### Simulation with the same stack
 
@@ -177,13 +176,40 @@ Scenes are built from a base city with variant generators for lighting, obstacle
 people. A new airframe is a new USD asset and a motor model. Flight patterns are scripted and
 produce reports, so a change is measured before it is flown.
 
-## 6. Known limitations in this release
+## 6. Before you fly: vehicle-specific calibration
 
-- Vision pose to the flight controller is disabled on hardware pending measurement of the mount,
-  height offset and bridge endpoint.
+A reference platform cannot ship values that belong to one airframe. Three of them decide whether
+the vision pose the flight controller receives is right, and a confidently wrong pose is worse for
+an EKF than none, so the odometry-to-controller link ships off and is turned on per vehicle after
+these are measured and checked on the bench with the aircraft restrained.
+
+| value | config key | what it is | how to get it |
+|---|---|---|---|
+| camera mount | `motion.cam_to_body_roll/pitch/yaw` | rotation from the camera's optical frame to the airframe's body frame. Shipped as forward-facing with zero tilt | from the mechanical mount, or a short calibration flight comparing VO deltas against the controller's own motion |
+| height offset | `mavlink.agl_offset_m` | height of the camera lens above the point the controller calls ground at arming. Metric scale is derived from the controller's height, so this sets the scale at low altitude | a tape measure on the landed vehicle |
+| bridge endpoint | `mavlink.target_ip` / `target_port` | the UDP address the MAVLink bridge on the board listens on; the odometry node sends there and receives attitude and height back on the same socket | from the mavlink-router or MAVProxy configuration on the board; confirm with a heartbeat |
+
+Once the three are in `config/vo/visual_odometry.yaml`, enabling the link is removing two lines
+from the hardware half, `visual_odometry.hw.yaml`: the `scale_mode: parallax` override and
+`mavlink.enable: false`. Then set ArduPilot's `VISO_DELAY_MS` to match keyframe emission (155 ms)
+and verify the pose stream from the ground station before arming.
+
+Two more values are per vehicle and already filled for the reference airframe. Re-measure them
+for yours:
+
+- **Camera intrinsics** (`fx fy cx cy` and distortion), in `camera.yaml` and repeated under
+  `visual_odometry.motion.camera`. A standard checkerboard calibration at the camera's native
+  resolution.
+- **Radar-to-camera extrinsic**, published as a static transform. Measured on the mount; the fusion
+  node's `debug_projection` output exists to check it visually.
+
+And one setting that is not calibration but is still yours to change: the WiFi hotspot's SSID
+and passphrase in `provisioning/wifi/`. The release ships a default. Never fly on it.
+
+## 7. Known limitations in this release
+
 - Radar profile selection from the launch is not wired; the active profile is whatever the driver's
   installed share holds, and a reflash resets it.
 - The vehicle description (URDF) does not exist yet, so there is no TF tree beyond the sensors.
 - The alternative LightGlue variant is shipped for a different accelerator runtime build and is not
   loaded here.
-- The WiFi hotspot in this release has a default passphrase. Change it before flying.
