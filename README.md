@@ -31,6 +31,13 @@ Then follow `INSTALL.md` inside the extracted folder. It lists the hardware that
 which peripherals are optional, and the flags that declare one absent. The "Source code" archives
 GitHub attaches to every release contain only this README and the license.
 
+## Before you fly
+
+A release may ship the board's WiFi hotspot with a **default SSID and passphrase** in its
+`provisioning/wifi/` scripts and docs. That network gives root ssh access to the board to anyone
+in WiFi range. Set your own before running the WiFi bring-up, and never fly a vehicle that still
+uses the default. Each release's `INSTALL.md` says where.
+
 ## Installing
 
 Every release follows the same three steps, run from a laptop with ssh to the board or from the
