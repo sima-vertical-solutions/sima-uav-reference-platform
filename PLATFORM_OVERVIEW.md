@@ -203,6 +203,54 @@ for yours:
 - **Radar-to-camera extrinsic**, published as a static transform. Measured on the mount; the fusion
   node's `debug_projection` output exists to check it visually.
 
+### The flight controller side
+
+The board's half is not enough: ArduPilot has to be told to accept vision and to fly without GPS.
+The release ships the parameter set it uses in simulation, `sim/common/params/gps_denied_hitl.parm`,
+and the same values apply on hardware with two exceptions noted below.
+
+| parameter | value | why |
+|---|---|---|
+| `VISO_TYPE` | `1` | enables visual odometry input. At 0 every vision message is silently dropped and arming is refused |
+| `VISO_POS_X/Y/Z` | camera position relative to the controller, metres, body frame | per vehicle: measure on the airframe |
+| `VISO_DELAY_MS` | `155` | latency of keyframe emission; must match the odometry algorithm in use |
+| `EK3_SRC1_VELXY` | `6` (ExternalNav) | the board sends body-frame deltas, which EKF3 fuses as velocity |
+| `EK3_SRC1_POSXY` | `0` | no absolute horizontal position source: relative-position flight |
+| `EK3_SRC1_POSZ` / `EK3_SRC1_VELZ` | `1` (barometer) / `0` | vision-only height drifts without bound; every drone has a barometer |
+| `EK3_SRC1_YAW` | `1` (compass) | deltas carry no absolute heading |
+| `GPS1_TYPE` | `0` | GPS-denied. Leave your GPS enabled if you want it as a fallback source instead |
+
+Do not copy `ARMING_SKIPCHK -1` or the `SIM_*` and `FRAME_*` lines onto a real aircraft; they are
+for the simulator. Also set the controller's serial port and baud for the companion link to match
+`flight_controller.serial` and `.baud` in the system config (reference: `/dev/ttyACM0`,
+921600, MAVLink 2), and make sure the bridge forwards the controller's replies back to the board.
+Without `ATTITUDE` and `LOCAL_POSITION_NED` arriving, the metric scale has nothing to work from.
+
+### Other per-vehicle settings
+
+- **Radar profile.** The sensor `.cfg` lives in the driver's installed share on the board, and a
+  reflash resets it. Its frame rate must stay at the 20 Hz the fusion and the acceptance gate
+  expect, and `aoaFovCfg` should match the radar's field of view on your mount.
+- **DDS domain.** Two vehicles on one network must have different `ROS_DOMAIN_ID`s, or they see
+  each other's topics and the acceptance gate can pass on a neighbour's traffic. Set it with
+  `deploy.sh --domain`, or use `--isolated` on a vehicle that talks only to itself.
+- **Acceptance rates.** The expected topic rates in `acceptance.yaml` were measured with the
+  reference camera at 1920x1080, 30 fps. A different camera changes them, and the gate will say so.
+
+### Bench check before the first flight
+
+1. Run `provision.sh` without flags and get `board READY`.
+2. Install, launch, and run the rate gate: every topic at its expected rate.
+3. With the aircraft **restrained** and armed only from the ground station, move it by hand and
+   watch the EKF's position in the ground station follow. Check that the direction matches: a
+   wrong mount angle shows up here as motion on the wrong axis.
+4. Check the vision message rate and the EKF's innovation on the ground station. Rejected vision
+   data means scale or delay is wrong.
+5. Only then fly, in a mode that holds position, low and short.
+
+Arm only from the ground control station, never from this software; nothing in the release
+commands the aircraft.
+
 And one setting that is not calibration but is still yours to change: the WiFi hotspot's SSID
 and passphrase in `provisioning/wifi/`. The release ships a default. Never fly on it.
 
