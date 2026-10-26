@@ -11,6 +11,9 @@ self-contained archive with its installer, board health check and configuration,
 SHA-256 checksum and published automatically from the development repository. Source is maintained
 privately; this repository holds only the releases.
 
+[`PLATFORM_OVERVIEW.md`](PLATFORM_OVERVIEW.md) describes what the current release does, which
+sensors unlock each feature, what a customer gains from it and how it is meant to be extended.
+
 ## Download
 
 Each entry on the [Releases page](../../releases) ships an archive and its checksum:
