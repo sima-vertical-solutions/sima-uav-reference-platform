@@ -1,6 +1,6 @@
-# Drone reference platform — releases
+# UAV reference platform — releases
 
-This repository distributes releases of a **drone reference platform**: installable software
+This repository distributes releases of a **UAV reference platform**: installable software
 stacks that turn an edge AI compute board into the onboard computer of an autonomous drone. Each
 release is a complete, working example of the platform, from the board's base image to the
 applications running on it, built to be installed as-is and then adapted.
