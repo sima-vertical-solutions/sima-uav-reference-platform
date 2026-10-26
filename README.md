@@ -1,7 +1,18 @@
-# Mistral drone stack — releases
+# SiMa.ai drone reference platform — releases
 
-Built releases of the Mistral drone perception and visual-odometry stack for the SiMa.ai Modalix
-DevKit. This repository holds **only the release archives**; the source is maintained privately.
+This repository distributes releases of the SiMa.ai **drone reference platform**: a complete,
+installable software stack that turns a Modalix DevKit into the perception and odometry computer
+of an autonomous drone. It pairs radar and camera fusion for obstacle detection with monocular
+visual odometry that feeds pose to an ArduPilot flight controller over MAVLink, all running on the
+SiMa.ai MLA under ROS 2 Jazzy.
+
+The platform is built to be adopted and adapted. It ships with a reference sensor set, a TI
+IWR6843ISK radar, a MIPI camera and a CubeOrange+ flight controller, but every peripheral beyond
+the camera is optional and declared at install time, so the same release runs on a bench DevKit, a
+camera-only airframe or a full drone. Each release is a self-contained archive with its installer,
+board health check, configuration and quantized models, verified by a SHA-256 checksum and
+published automatically from the development repository. Source is maintained privately; this
+repository holds only the releases.
 
 ## Download
 
