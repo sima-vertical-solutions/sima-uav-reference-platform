@@ -14,17 +14,40 @@ What the current release does, which sensors it uses and how it is meant to be e
 
 ## What a release contains
 
-Each entry on the Releases page attaches these files. The "Source code" archives GitHub adds
-automatically contain only this README and the license and are not needed.
+The current release is **0.4.2**. It attaches these files; later releases follow the same
+naming with their own version number. The "Source code" archives GitHub adds automatically
+contain only this README and the license and are not needed.
 
-| asset | intended use |
-|---|---|
-| `<name>-<version>.tar.gz` | the release itself: everything below, in one folder |
-| `<name>-<version>.tar.gz.sha256` | checksum of the archive, checked before you unpack it |
-| `neat-stage-<version>.tar.gz` (+ `.sha256`) | the exact SiMa NEAT runtime this release was built against, when the release notes say the board needs it installed first |
+| asset | size | intended use |
+|---|---|---|
+| [`mistralsolutions-0.4.2.tar.gz`](https://github.com/sima-vertical-solutions/sima-uav-reference-platform/releases/download/0.4.2/mistralsolutions-0.4.2.tar.gz) | 349 MB | the release itself: everything below, in one folder |
+| [`mistralsolutions-0.4.2.tar.gz.sha256`](https://github.com/sima-vertical-solutions/sima-uav-reference-platform/releases/download/0.4.2/mistralsolutions-0.4.2.tar.gz.sha256) | 96 B | checksum of the archive, checked before you unpack it |
+| [`neat-stage-0.4.0-yolox-seg-pose.tar.gz`](https://github.com/sima-vertical-solutions/sima-uav-reference-platform/releases/download/0.4.2/neat-stage-0.4.0-yolox-seg-pose.tar.gz) | 113 MB | the exact SiMa NEAT runtime this release was built against (`0.4.0+feature-yolox-seg-pose`). The board needs it installed before `deploy.sh`; the release notes give the steps |
+| [`neat-stage-0.4.0-yolox-seg-pose.tar.gz.sha256`](https://github.com/sima-vertical-solutions/sima-uav-reference-platform/releases/download/0.4.2/neat-stage-0.4.0-yolox-seg-pose.tar.gz.sha256) | 105 B | checksum of the NEAT archive |
 
-Unpacking the archive gives a folder named `<name>-<version>/`. Nothing in it needs a build
-machine, a container or a source checkout. **Do not edit anything inside it**: the installer
+Unpacking the archive gives a folder named `mistralsolutions-0.4.2/`:
+
+```
+mistralsolutions-0.4.2/
+├── INSTALL.md
+├── README.md
+├── release_notes.txt
+├── version.yaml
+├── provision.sh
+├── deploy.sh
+├── check_rates.py
+├── acceptance.yaml
+├── install/
+├── native_libs/
+├── setup_overlay.sh
+├── fastdds_large.xml
+├── deploy.env
+├── SHA256SUMS
+├── provisioning/
+└── sim/
+```
+
+Nothing in it needs a build machine, a container or a source checkout. **Do not edit anything inside it**: the installer
 checks every file against `SHA256SUMS` and refuses to run if one has changed.
 
 ### Documents
@@ -33,7 +56,7 @@ checks every file against `SHA256SUMS` and refuses to run if one has changed.
 |---|---|
 | `INSTALL.md` | **start here.** The complete guide: what you need, first-time board bring-up, install, run, check, update, roll back, uninstall, troubleshooting, safety |
 | `README.md` | one-page operator summary of the same folder, with the hardware the board needs and the flags that declare a peripheral absent |
-| `CONFIGURATION.md` | every externalized parameter: which file it lives in, its hardware and simulation values, whether it has been verified on the target vehicle. (Shipped in the archive from the release after 0.4.2; for 0.4.2 use the copy in this repository) |
+| `CONFIGURATION.md` | every externalized parameter: which file it lives in, its hardware and simulation values, whether it has been verified on the target vehicle. Not inside the 0.4.2 archive; use [the copy in this repository](CONFIGURATION.md). Shipped in the archive from the next release |
 | `release_notes.txt` | what changed since the previous release, and anything the board needs before installing |
 | `version.yaml` | the identity of this build: release number, build time, source commits, base image, NEAT version and the checksum of every model. Copied to the board so it can report what it runs |
 
@@ -50,8 +73,8 @@ checks every file against `SHA256SUMS` and refuses to run if one has changed.
 
 | file | intended use |
 |---|---|
-| `install/` | the built ROS 2 overlay: camera publisher, perception (segmentation on the MLA and radar-camera fusion), visual odometry, radar driver, Foxglove bridge, system monitor, launch files, this drone's configuration and the model archives under `share/` |
-| `native_libs/` | shared libraries the board's base image lacks in the right ABI. Copied alongside the overlay; may be empty |
+| `install/` | the built ROS 2 overlay, activated by `install/setup.bash`. Under `install/share/`: `camera_publisher`, `neat_inference` and `radar_camera_fusion` (perception), `visual_odometry` with `superpoint`, `lightglue` and `vo_motion` (odometry), `ti_mmwave_rospkg` (radar driver), `foxglove_bridge`, `system_monitor`, `system_config`, and `mistral_bringup` holding the launch files, this drone's configuration and the model archives `yolo_v8m_seg_mpk.tar.gz`, `superpoint_mpk.tar.gz`, `lightglue_mpk.tar.gz`, `lightglue_isaac_qat_mpk.tar.gz` |
+| `native_libs/` | shared libraries the board's base image lacks in the right ABI, copied alongside the overlay. In 0.4.2: `libgtsam.so.4`, `libgtsam_unstable.so.4`, `libmetis-gtsam.so` and four `libboost_*.so.1.74.0` |
 | `setup_overlay.sh` | sourced by the generated run scripts on the board to activate the overlay. Not run by hand |
 | `fastdds_large.xml` | DDS transport profile that lets full-size camera frames pass over shared memory |
 | `deploy.env` | the board wiring frozen at build time: client and bringup package names, remote directory, ROS domain ID, system config file. Read by the scripts, not edited |
@@ -61,8 +84,20 @@ checks every file against `SHA256SUMS` and refuses to run if one has changed.
 
 | folder | intended use |
 |---|---|
-| `provisioning/` | one-time board bring-up, done once per board before the first install. `README.md` is the index. `radar/` flashes the radar firmware; `rpanion/` installs mavlink-router, which bridges the flight controller to the visual-odometry node; `mavproxy/` checks that link from a ground station; `wifi/` and `lte/` set up the network you reach the board on; `foxglove/` holds Foxglove Studio layouts and the segmentation overlay extension; `secrets.example.env` is the template for your WiFi, APN and other credentials |
-| `sim/` | the simulator side of `--mode sim`: NVIDIA Isaac Sim scenes (`urban-scene/`, `school-scene/`), ArduPilot parameter sets for GPS-denied flight under `common/params/`, the SITL/HITL bridge, flight scripts and `report_flight.py` for scoring a flight. Runs on a GPU workstation, not on the board |
+| `provisioning/` | one-time board bring-up, done once per board before the first install. `provisioning/README.md` is the index |
+| `provisioning/radar/SETUP.md` | flash the IWR6843ISK radar firmware (`small_obstacle_detection_68xx.bin`) with TI UniFlash |
+| `provisioning/rpanion/SETUP.md` | install Rpanion-server and mavlink-router, which bridges the flight controller's serial link to UDP for the visual-odometry node |
+| `provisioning/mavproxy/SETUP.md` | check the flight-controller link from a ground station with MAVProxy |
+| `provisioning/wifi/SETUP.md`, `provisioning/wifi/Assets/` | WiFi hotspot: the 8852cu driver source (`wifi_file.zip`), `setup_hotspot.sh` and `hotspot_static.sh`, their systemd units, `NetworkManager.conf`, `rtw_options.conf`, `99-wifi-hotplug.sh`. **Set your own SSID and passphrase here** |
+| `provisioning/lte/SETUP.md`, `provisioning/lte/Assets/` | LTE modem: `wwan_kernel_object.zip` and `wwan_setup.sh`, plus the APN setup |
+| `provisioning/foxglove/` | Foxglove Studio layouts (`layouts/radar_fusion.hw.json`, `radar_fusion.sim.json`), the segmentation overlay extension `simaai.seg-overlay-0.0.8.foxe`, `coco_yolov8.json` class names, and the on-board launchers `run_bridge.sh` and `run_jpeg.sh` with `jpeg_republish.py` |
+| `provisioning/secrets.example.env` | template for your WiFi interface, MAC, SSID, passphrase, AP address and LTE APN. Copy to `secrets.env`, fill in, keep out of the bundle |
+| `sim/` | the simulator side of `--mode sim`. Runs on a GPU workstation with NVIDIA Isaac Sim, not on the board. `sim/README.md` is the guide, `sim/RELEASE_NOTES.md` what differs from its upstream |
+| `sim/common/` | shared by every scene: `scripts/launch_sim.py`, `fly.py`, `build_quadrotor.py`, `check_sitl.py`, `check_frames.py`, `probe_camera.py`, `drift_report.py`; the SITL/HITL bridge under `src/`; `board/feature_bridge_isaac.yaml` for the board's sim camera |
+| `sim/common/params/` | ArduPilot parameter sets, one per position source: `gps_sitl.parm`, `gps_denied.parm`, `gps_denied_hitl.parm`, `gps_denied_hitl_pose.parm`, `baro_only.parm`. `gps_denied_hitl.parm` is the reference for the vision-position settings in `PLATFORM_OVERVIEW.md` section 6 |
+| `sim/urban-scene/` | GPS-denied flight in NVIDIA's Rivermark city: `launch_sim.sh`, `fly.sh`, `configs/sim*.yaml`, `docs/HITL.md`, scene and route scripts |
+| `sim/school-scene/` | a second scene with the same layout: `launch_sim.sh`, `fly.sh`, `configs/sim.yaml`, `scripts/build_scene.py`, `survey_area.py` |
+| `sim/report_flight.py` | scores a flown or simulated flight from its log |
 
 ## Installing, step by step
 
@@ -70,17 +105,29 @@ The full text with expected output and every variant is `INSTALL.md` inside the 
 sequence is the same for every release. Commands run on a Linux or macOS laptop with
 passwordless `root` ssh to the board, unless noted.
 
-1. **Download and verify.** From the Releases page, download the archive and its checksum, then:
+1. **Download and verify.** For 0.4.2:
 
    ```bash
-   sha256sum -c <name>-<version>.tar.gz.sha256
-   tar -xzf <name>-<version>.tar.gz
-   cd <name>-<version>
+   curl -LO https://github.com/sima-vertical-solutions/sima-uav-reference-platform/releases/download/0.4.2/mistralsolutions-0.4.2.tar.gz
+   curl -LO https://github.com/sima-vertical-solutions/sima-uav-reference-platform/releases/download/0.4.2/mistralsolutions-0.4.2.tar.gz.sha256
+   sha256sum -c mistralsolutions-0.4.2.tar.gz.sha256
+   tar -xzf mistralsolutions-0.4.2.tar.gz
+   cd mistralsolutions-0.4.2
    ```
 
-2. **Read `release_notes.txt`.** It says whether the board needs something before this release,
-   such as a specific NEAT runtime. If a `neat-stage-*.tar.gz` is attached, copy it to the
-   board and install it as root, following the notes, before going on.
+2. **Read `release_notes.txt`.** It says whether the board needs something before this release.
+   0.4.2 needs NEAT `0.4.0+feature-yolox-seg-pose`, attached as
+   `neat-stage-0.4.0-yolox-seg-pose.tar.gz`. Copy it and its `.sha256` to the board and, as root
+   on the board:
+
+   ```bash
+   sha256sum -c neat-stage-0.4.0-yolox-seg-pose.tar.gz.sha256
+   tar xzf neat-stage-0.4.0-yolox-seg-pose.tar.gz && cd neat-stage
+   bash install_neat_framework.sh --local
+   sha256sum /lib/firmware/modalix-cvu-fw                    # these two hashes must match;
+   cat /usr/share/sima-neat-firmware/modalix-cvu-fw.sha256   # if not, run the line below
+   /usr/libexec/sima-neat-firmware/activate-ev74-firmware.sh
+   ```
 
 3. **Check that you can reach the board.**
 
@@ -149,7 +196,7 @@ passwordless `root` ssh to the board, unless noted.
 9. **Confirm what is installed.**
 
    ```bash
-   ssh root@<board-ip> cat /root/sima_ws/version.yaml   # release: <version>
+   ssh root@<board-ip> cat /root/sima_ws/version.yaml   # release: 0.4.2
    ```
 
 **Updating** is step 1 and step 6 with the new folder. **Rolling back** is step 6 from an older
