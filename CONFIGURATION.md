@@ -1,9 +1,3 @@
-> Configuration reference for the perception and visual-odometry stack, as of release 0.4.2.
-> From the next release this file also ships inside the archive as `CONFIGURATION.md`, next to
-> `INSTALL.md`. Repo paths such as `src/mistral_bringup/config/...` refer to the development
-> repository; on an installed board the same files are under
-> `<remote_dir>/install/share/mistral_bringup/config/`.
-
 # Configuration reference
 
 Every parameter of the Mistral drone stack that is set outside the node code, where it lives, what
@@ -49,6 +43,8 @@ into the install share, and a config `model_path` selects which one a node loads
 | `dds_profile` | `config/dds/fastdds_large.xml` | Fast DDS profile for large (image) messages, exported as `FASTRTPS_DEFAULT_PROFILES_FILE` by the run wrapper |
 | `bundle_libs` | `[]` | native libraries to ship when the board's ABI lacks them |
 | `runtime_pip` | the vendored GTSAM wheel | wheels installed on the board at deploy |
+| `vo_pip` | the vendored OpenCV 4.10 wheel | wheels for the VO process alone, in `install/lib/vo_pydeps`. eLxr 2.x only (VP-16801) |
+| `neat_stage` | `vendor/neat/neat-stage-0.4.0-yolox-seg-pose.tar.gz` | SiMa's offline NEAT stage, shipped as `prereq/neat/`; `deploy.sh` installs it on a board with another NEAT (VP-16803) |
 | `models` | `models/models.manifest.yaml` | the model manifest to provision |
 
 ### `deploy.sh` flags
@@ -57,12 +53,15 @@ into the install share, and a config `model_path` selects which one a node loads
 |---|---|
 | `--mode hw\|sim` | hardware (default) or simulation. Selects the `.hw.yaml`/`.sim.yaml` halves and, in sim, turns the camera and radar stacks off |
 | `--no-camera` | declares no camera. Skips the camera probe, bakes `camera:=false` into the wrapper, gate profile `replay` |
-| `--no-radar` | declares no radar. Bakes `radar_driver:=false`, gate profile `hw_no_radar` |
+| `--no-radar` | declares no radar. Bakes `radar_driver:=false`, the TUI's radar row in STANDBY, gate profile `hw_no_radar` |
+| `--radar` | declares a radar where the system config's `sensors.radar.enabled` is `false` (the x650's). Without either flag that key decides |
 | `--no-perception` | leaves the perception stack out (`perception:=false`); allowed in sim |
 | `--domain N` | ROS_DOMAIN_ID for this install (0–101) |
 | `--isolated` | `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`: the board talks only to itself. Not with sim |
 | `--sim-host IP` | sim only: exported as `ROS_STATIC_PEERS` so the board finds the simulator |
 | `--remote-dir DIR` | install somewhere other than `remote_dir` |
+| `--keep-neat` | leave the board's NEAT as it is even when it differs from the release's; warns instead of installing `prereq/neat/` |
+| `--sys-config FILE` | the system config in `config/system/` the wrappers launch with, default `sys_config` from `deploy.yaml`: `mistral_config.yaml` (MIPI camera) or `x650_config.yaml` (the x650's USB camera) |
 | `--run` | launch after installing |
 
 `provision.sh` takes `--mode`, `--no-camera`, `--no-radar` and additionally `--no-fc` (no flight
@@ -86,11 +85,10 @@ mode:=<mode>` plus whatever the deploy flags baked in. Available arguments:
 |---|---|---|
 | `sys_config` | `mistral_config.yaml` | system config file in `config/system/` |
 | `mode` | `hw` | `hw` or `sim`; selects the per-mode config halves |
-| `camera` | `true` in hw, `false` in sim | start the camera publisher |
-| `radar_driver` | `true` in hw, `false` in sim | start the TI radar driver |
+| `camera` | `true` in hw, `false` in sim and where `sensors.camera.enabled` is `false` | start the camera publisher |
+| `radar_driver` | `true` in hw, `false` in sim and where `sensors.radar.enabled` is `false` (the x650) | start the TI radar driver |
 | `perception` | `true` | start segmentation + radar fusion |
 | `vo` | `true` | start visual odometry |
-| `radar_cfg` | `""` | **not wired**: declared by the radar include, consumed by nothing (section 8) |
 
 A failing include aborts the whole launch, so a stack that cannot come up must be switched off
 here rather than left to fail.
@@ -104,16 +102,23 @@ Loaded by sima-core's `system_config`; the keystone every include receives as `s
 | `system.robot_name` | `mistral_drone` | |
 | `system.use_sim_time` | `false` | |
 | `system.description_package` | `mistral_description` | package does not exist yet; its `exec_depend` is commented out |
-| `sensors.camera.enabled` / `.type` | `true` / `TODO` | ingestion type (`neat_camera` vs `ros_image`) undecided; the stack runs `ros_image` via `camera_publisher` |
-| `sensors.radar.enabled` / `.type` / `.topic` | `true` / `ti_mmwave_6843isk` / `/ti_mmwave/radar_scan_pcl` | |
+| `sensors.camera.enabled` / `.type` | `true` / `mipi_csi` | the driver `launch_camera.launch.py` starts, that camera's parameters and mount on the drone (`config/camera/<type>.yaml`) and the VO parameters `launch_vo.launch.py` adds (`config/vo/params/<type>.yaml`): `mipi_csi` (econ IMX568) or `usb_uvc` (ELP AR0234). `x650_config.yaml` is this file with `usb_uvc` |
+| `sensors.radar.enabled` / `.type` / `.topic` / `.cfg` | `true` / `ti_mmwave_6843isk` / `/ti_mmwave/radar_scan_pcl` / unset | `.cfg`: the radar profile, a file in `config/radar/` or the driver's `cfg/`; unset = `6843ISK_Standard.cfg`, which both drones fly (section 8) |
 | `odometry.visual.enabled` / `.type` / `.sink` | `true` / `visual_odometry` / `mavlink_vision_position_delta` | |
 | `flight_controller.model` / `.serial` / `.baud` / `.mavlink_version` | `cube_orange_plus` / `/dev/ttyACM0` / `921600` / `2.0` | `/dev/ttyS1` when wired over UART |
+| `flight_controller.bridge.*` | `pose_topic: /vo_debug/odometry` | hw only: parameters of the `fc_bridge` stack's `flight_controller_bridge` over `config/fc_bridge/flight_controller_bridge.hw.yaml`; `pose_topic` is sent to the FC as `VISION_POSITION_ESTIMATE` (`""` sends nothing) |
 | `rosbag.record` / `.recording_path` / `.bagname_prefix` / `.compression` | `false` / `TODO` / `rosbag` / `true` | |
 | `rosbag.topics` | radar, both detection topics, `vo_debug/odometry`, `/tf`, `/tf_static` | exact-match allowlist |
 
-## 5. Camera: `config/camera/camera.yaml` (+ `camera.detected.yaml`)
+## 5. Camera: `config/camera/<sensors.camera.type>.yaml` (+ `camera.detected.yaml`)
 
-Node: sima-core `camera_publisher`, the single owner of the MIPI camera. Feeds both perception and
+One file per camera: `mipi_csi.yaml` (the Mistral drone's econ IMX568, below) and `usb_uvc.yaml`
+(the x650's ELP AR0234, 1280x960). Each holds the `camera_publisher` parameters and the camera's
+`mount`. On hardware the launches take the frame size from it for `neat_inference`,
+`radar_camera_fusion` (`source_width` / `source_height`) and `object_tracker` (`image_width` /
+`image_height`).
+
+Node: sima-core `camera_publisher`, the single owner of the camera. Feeds both perception and
 VO; publishes NV12 and `/camera_info` from the intrinsics below.
 
 | parameter | value | notes |
@@ -129,6 +134,13 @@ VO; publishes NV12 and `/camera_info` from the intrinsics below.
 The same intrinsics are repeated under `visual_odometry.motion.camera` (section 7); keep the two
 copies identical.
 
+The camera's mount on the drone is the file's `mount` section, read by the launches, not by a
+node: `cam_to_body_roll` / `_pitch` / `_yaw` (rad, optical -> body FRD) and `cam_offset_m`
+(m, FRD). The VIO gets it as its extrinsics; target pursuit publishes it on hardware as
+`base_link -> camera_frame`, which guidance reads the camera's tilt from. `mipi_csi`: the
+Mistral drone, 46° down from flight data, offset from a photo (±5 cm); `usb_uvc`: the x650's
+Kalibr camera-IMU calibration, 38.5° down, 3.3° left.
+
 ## 6. Perception: `config/perception/radar_fusion*.yaml`
 
 Three nodes from sima-core: `neat_inference` (YOLOv8-seg on the MLA), `radar_camera_fusion`,
@@ -143,7 +155,7 @@ Three nodes from sima-core: `neat_inference` (YOLOv8-seg on the MLA), `radar_cam
 | `input_mode` | `ros_image` | same | the node has no camera mode |
 | `image_topic` | `/image_raw` | `/image_bgr` | |
 | `input_encoding` | `nv12` | `bgr8` | fixed at model load, must be declared |
-| `source_width` / `source_height` / `fps` | `1920` / `1080` / `30` | `640` / `480` / `10` | must match the publisher; NEAT sizes its input from them |
+| `source_width` / `source_height` / `fps` | the camera's frame / `30` | `640` / `480` / `10` | must match the publisher; NEAT sizes its input from them. hw: from `config/camera/<type>.yaml` |
 | `payload_kind` / `output_mode` | `image` / `ros` | same | |
 | `render` / `publish_raw_image` | `false` / `false` | same | `publish_raw_image` must stay false: it would republish onto the node's own input |
 | `output_topic` | `simaai/segmentation/detections` | same | |
@@ -158,9 +170,9 @@ Three nodes from sima-core: `neat_inference` (YOLOv8-seg on the MLA), `radar_cam
 |---|---|---|---|
 | `detections_topic` | `simaai/segmentation/detections` | same | |
 | `radar_topic` | `/ti_mmwave/radar_scan_pcl` | same (nothing publishes it) | in sim the node emits vision-only detections with `has_radar: false` |
-| `camera_info_topic` | `/camera_info` | `/image_bgr/camera_info` | |
+| `camera_info_topic` | `/camera_info` | same: the simulator publishes it beside `/image_bgr` | |
 | `pub_topic` | `/simaai/radar_fusion/detections` | same | |
-| `source_width` / `source_height` | `1920` / `1080` | `640` / `480` | the resolution `camera_info`'s K is expressed in |
+| `source_width` / `source_height` | the camera's frame | `640` / `480` | the resolution `camera_info`'s K is expressed in. hw: from `config/camera/<type>.yaml` |
 | `velocity_field` | `velocity` | same | **VERIFY**: the Doppler field name in this driver build; `""` if none |
 | `model_width` / `model_height` | `640` / `640` | same | |
 | `mask_threshold` / `use_mask_gate` | `100` / `true` | same | |
@@ -211,9 +223,9 @@ Node: sima-core `visual_odometry` lifecycle node, running SuperPoint + LightGlue
 | `motion.parallax_derotate` / `parallax_direction_normalize` | `true` / `true` | | | |
 | `motion.ground.normal_at_cur` | `false` | | | |
 | `motion.scale_factor` | `0.3` | | `0.345` | parallax scale only |
-| `motion.cam_to_body_roll` / `_pitch` / `_yaw` | `π/2` / `0` / `π/2` | | `1.309` / `0` / `π/2` | **VERIFY / per-unit**: forward-facing, zero tilt assumed; re-derive for the real mount |
-| `motion.camera.fx` / `fy` / `cx` / `cy` | as `camera.yaml` | | `549.749` / `549.749` / `320` / `240` | at the input image's own resolution, not the model's |
-| `motion.camera.dist_coeffs` | as `camera.yaml` | | zeros | |
+| `motion.cam_to_body_roll` / `_pitch` / `_yaw` | `π/2` / `0` / `π/2` | per airframe | `1.309` / `0` / `π/2` | hw: the camera's mount from `config/camera/<sensors.camera.type>.yaml` (with `vio.cam_offset_m`), over `config/vo/params/<type>.yaml` (`vio.cam_time_offset_s`, the IMU noise `vio.gyro_*`, `vio.accel_*`) |
+| `motion.camera.fx` / `fy` / `cx` / `cy` | as `config/camera/<type>.yaml` | | `549.749` / `549.749` / `320` / `240` | at the input image's own resolution, not the model's |
+| `motion.camera.dist_coeffs` | as `config/camera/<type>.yaml` | | zeros | |
 | `keyframe.max_emit_step_m` | | | `1.5` | |
 
 ### MAVLink
@@ -238,22 +250,25 @@ the raw LightGlue archives), `SIMA_MPK_EXTRACT_ROOT` (where MPKs are unpacked).
 
 ## 8. Radar driver: `config/radar/`
 
-The driver is `ti_mmwave_rospkg`, launched through its own `6843ISK_Standard.py` with `rviz:=false`.
-Its configuration is the sensor `.cfg`, which lives **inside the installed driver share**, not in
-this repo's config tree. Two profiles exist:
+The driver is `ti_mmwave_rospkg`, launched through its own `IWR6843.py` with `rviz:=false` and the
+ports `6843ISK_Standard.py` used (`/dev/ttyUSB0`, `/dev/ttyUSB1`).
+Its configuration is the sensor `.cfg`, chosen per drone by `sensors.radar.cfg` in the system
+config: a file in `config/radar/`, or one in the installed driver's `cfg/`. Two profiles exist:
 
 | | `6843ISK_Standard.cfg` (default, stock, not committed) | `6843ISK_DopC.cfg` (committed) |
 |---|---|---|
-| `profileCfg` ADC samples | 256 | 64 |
+| `profileCfg` slope / ADC samples | 166 MHz/us / 256 | 166 MHz/us / 64 |
 | `frameCfg` loops | 32 | 128 |
-| range / Doppler resolution | 0.044 m / 0.81 m/s | 0.176 m / 0.099 m/s |
+| range: max / resolution | 9.0 m / 0.044 m | 9.0 m / 0.176 m |
+| Doppler resolution | 0.81 m/s | 0.099 m/s |
 | frame rate | 20 FPS | 20 FPS |
+
+The maximum range is set by the 10 MHz IF bandwidth: 10 MHz * c / (2 * slope).
 
 Fusion wants the fine range, so Standard is correct for it. Lines the fusion synchroniser depends on:
 `frameCfg` (frame rate, feeds `expect_hz` of the radar topic), `aoaFovCfg` (field of view),
-`cfarFovCfg` (range gate: 0.25–9.0 m in DopC, which is why fusion's `max_range` is 11.0). Profile
-selection from launch is **not wired** (`radar_cfg` is declared and ignored); switching means
-editing the driver's share on the board, and a reflash erases it. Firmware:
+`cfarFovCfg` (range gate: 0.25–9.0 m in Standard and DopC). The drones fly Standard, which is why
+fusion's `max_range` is 11.0. Firmware:
 `small_obstacle_detection_68xx.bin`, flashed with TI UniFlash; see `provisioning/radar/`.
 
 ## 9. Models: `models/models.manifest.yaml`
@@ -303,7 +318,7 @@ Collected from the `VERIFY` and `TODO` markers above. Wrong values here do not f
 drifts or its output never reaches the flight controller.
 
 - `radar_camera_fusion.velocity_field`: the Doppler field name in this driver build.
-- `visual_odometry.motion.cam_to_body_*`: the camera mount, assumed forward-facing with no tilt.
+- `cam_offset_m` of the Mistral drone (`config/camera/mipi_csi.yaml`): from a photo, ±5 cm.
 - `visual_odometry.mavlink.target_ip` / `target_port`: the MAVLink bridge's endpoint on the board.
 - `visual_odometry.mavlink.agl_offset_m`: camera height above the FC's ground reference.
 - `mavlink.enable` is forced off on hardware until the three above are measured.
